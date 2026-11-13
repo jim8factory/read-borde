@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>フルカラー電光掲示板</title>
+<style>
+:root{color-scheme:dark;--bg:#10141d;--panel:#1a2230;--line:#344257;--accent:#21d4fd}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4ff;font:15px/1.5 system-ui,"Yu Gothic UI",Meiryo,sans-serif}
+header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(20px,3vw,28px);margin:0}header small{color:#aab8cc}
+main{max-width:1400px;margin:auto;padding:18px;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(290px,.85fr);gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+h2{font-size:16px;margin:0 0 13px;color:#cfe4ff}
+.screen-wrap{background:#05070b;border:1px solid #46556a;border-radius:12px;padding:12px;box-shadow:inset 0 0 30px #000}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/5;background:#000;border-radius:5px}
+.screen-foot{display:flex;justify-content:space-between;color:#91a3ba;font-size:12px;margin-top:8px;gap:8px;flex-wrap:wrap}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.field{margin:12px 0}
+label{display:block;color:#b8c8dc;font-size:13px;margin-bottom:5px}
+input[type=text],textarea,select{width:100%;background:#0e1520;color:#fff;border:1px solid #40516a;border-radius:8px;padding:10px;font:inherit}
+textarea{resize:vertical;min-height:68px}
+input[type=color]{width:44px;height:38px;padding:2px;background:#0e1520;border:1px solid #40516a;border-radius:8px}
+input[type=range]{width:100%;accent-color:#21d4fd}
+input[type=checkbox]{accent-color:#21d4fd}
+select{min-height:40px}
+button{border:1px solid #465a75;background:#26364b;color:#fff;border-radius:8px;padding:9px 13px;font:inherit;cursor:pointer}
+button:hover{background:#344b68}button.primary{background:#087eaa;border-color:#0da6d8}button.danger{background:#552c38;border-color:#88485b}
+button:disabled{opacity:.4;cursor:not-allowed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.value{color:#7ee7ff;font-variant-numeric:tabular-nums}
+.message-list{display:grid;gap:7px;margin-top:10px}
+.message{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#111a27;border:1px solid #33445b;border-radius:8px;padding:8px 10px}
+.message span{overflow-wrap:anywhere}.message button{padding:5px 9px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{color:#9cacc1;font-size:12px;margin-top:10px}
+.checks{display:flex;gap:14px;flex-wrap:wrap}
+.checks label{display:flex;align-items:center;gap:6px;margin:0}
+@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}.panel{padding:13px}}
+</style>
+</head>
+<body>
+<header><div><h1>フルカラー電光掲示板</h1><small>RGBカラー / LEDドット風表示 / ブラウザ版</small></div><div class="row"><span id="saveStatus" style="font-size:12px;color:#9cacc1">自動保存 ON</span><button id="fullscreenBtn">全画面表示</button></div></header>
+<main>
+<section class="panel">
+  <h2>掲示板表示</h2>
+  <div class="screen-wrap"><canvas id="board" width="1200" height="375" aria-label="電光掲示板表示"></canvas><div class="screen-foot"><span id="status">停止中</span><span>LED DOT MATRIX DISPLAY</span></div></div>
+  <div class="actions">
+    <button class="primary" id="startBtn">▶ 開始</button><button id="pauseBtn">Ⅱ 一時停止</button><button id="resetBtn">↺ 先頭へ</button><button id="clearBtn" class="danger">表示をクリア</button>
+  </div>
+  <p class="note">※ 画面表示をLEDの発光ドット風に再現しています。実際のLEDパネルへの出力機能ではありません。</p>
+</section>
+<aside class="panel">
+  <h2>メッセージ編集</h2>
+  <div class="field"><label for="messageInput">表示する文字</label><textarea id="messageInput">博多じんぱち</textarea></div>
+  <div class="actions"><button id="addBtn" class="primary">＋ メッセージを追加</button><button id="replaceBtn">現在のメッセージを変更</button></div>
+  <div class="field"><label>登録メッセージ</label><div id="messageList" class="message-list"></div></div>
+  <div class="field"><label for="effect">表示効果</label><select id="effect"><option value="rainbow">虹色グラデーション</option><option value="solid">単色</option><option value="pulse">色変化</option><option value="blink">点滅</option><option value="fade">フェード</option></select></div>
+  <div class="grid2">
+    <div class="field"><label for="textColor">文字色</label><input id="textColor" type="color" value="#00eaff"></div>
+    <div class="field"><label for="bgColor">背景色</label><input id="bgColor" type="color" value="#050812"></div>
+  </div>
+  <div class="field"><label for="speed">スクロール速度 <span class="value" id="speedVal">5</span></label><input id="speed" type="range" min="1" max="20" value="5"></div>
+  <div class="field"><label for="fontSize">文字サイズ <span class="value" id="fontVal">100</span>%</label><input id="fontSize" type="range" min="50" max="180" value="100"></div>
+  <div class="field"><label for="dotSize">LEDドットの大きさ <span class="value" id="dotVal">3</span></label><input id="dotSize" type="range" min="1" max="6" value="3"></div>
+  <div class="field checks"><label><input id="bold" type="checkbox" checked> 太字</label><label><input id="shadow" type="checkbox" checked> 発光表現</label><label><input id="vertical" type="checkbox"> 縦位置中央</label></div>
+  <div class="note">メッセージは登録順に繰り返し表示します。単色効果では「文字色」が使われます。</div>
+</aside>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id), canvas=$('board'),ctx=canvas.getContext('2d');
+let messages=['博多じんぱち　フルカラー電光掲示板'], index=0, x=canvas.width-260, running=false, raf=0, last=0, elapsed=0;
+const controls=['effect','textColor','bgColor','speed','fontSize','dotSize','bold','shadow','vertical'];
+const STORAGE_KEY='fullColorLedBoard.v1';
+let saveTimer=0;
+function saveSettings(){
+ const data={messages,index,messageInput:$('messageInput').value,settings:{}};
+ controls.forEach(id=>{const el=$(id);data.settings[id]=el.type==='checkbox'?el.checked:el.value});
+ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data));$('saveStatus').textContent='保存済み';}
+ catch(e){$('saveStatus').textContent='保存できません';}
+}
+function scheduleSave(){
+ clearTimeout(saveTimer);$('saveStatus').textContent='保存中…';
+ saveTimer=setTimeout(saveSettings,200);
+}
+function restoreSettings(){
+ try{
+  const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;
+  const data=JSON.parse(raw);
+  if(Array.isArray(data.messages)){messages=data.messages.filter(v=>typeof v==='string');if(!messages.length)messages=[''];}
+  index=Number.isInteger(data.index)?Math.max(0,Math.min(data.index,messages.length-1)):0;
+  if(data.settings&&typeof data.settings==='object')controls.forEach(id=>{
+   if(Object.prototype.hasOwnProperty.call(data.settings,id)){
+    const el=$(id);if(el.type==='checkbox')el.checked=!!data.settings[id];else el.value=String(data.settings[id]);
+   }
+  });
+  if(typeof data.messageInput==='string')$('messageInput').value=data.messageInput;
+  $('saveStatus').textContent='前回の設定を復元';
+ }catch(e){$('saveStatus').textContent='保存データを読み込めません';}
+}
+
+const current=()=>messages[index]||'';
+function updateLabels(){$('speedVal').textContent=$('speed').value;$('fontVal').textContent=$('fontSize').value;$('dotVal').textContent=$('dotSize').value}
+function renderList(){
+ const box=$('messageList');box.innerHTML='';
+ messages.forEach((m,i)=>{const d=document.createElement('div');d.className='message';const s=document.createElement('span');s.textContent=(i+1)+'. '+m;const b=document.createElement('button');b.textContent='表示';b.onclick=()=>{index=i;x=canvas.width-260;draw(0)};const del=document.createElement('button');del.textContent='削除';del.className='danger';del.onclick=()=>{messages.splice(i,1);if(!messages.length){messages=[''];index=0}else if(index>=messages.length)index=0;x=canvas.width-260;renderList();draw(0)};const actions=document.createElement('div');actions.className='row';actions.append(b,del);d.append(s,actions);box.append(d)});
+}
+function colorAt(t){
+ const effect=$('effect').value;
+ if(effect==='solid')return $('textColor').value;
+ if(effect==='pulse'){const h=(t*.035)%360;return `hsl(${h} 100% 62%)`}
+ return `hsl(${(t*.08)%360} 100% 62%)`;
+}
+function draw(dt){
+ const W=canvas.width,H=canvas.height,bg=$('bgColor').value;
+ ctx.clearRect(0,0,W,H);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ const text=current(),font= Math.round(88*Number($('fontSize').value)/100);
+ ctx.save();ctx.font=`${$('bold').checked?'800':'500'} ${font}px "Yu Gothic UI",Meiryo,sans-serif`;
+ ctx.textBaseline='middle';ctx.textAlign='left';
+ const tw=ctx.measureText(text).width, y=$('vertical').checked?H/2:H/2;
+ const effect=$('effect').value, phase=(performance.now()/1000);
+ let alpha=1;if(effect==='blink')alpha=Math.floor(phase*2)%2?0.08:1;
+ if(effect==='fade')alpha=.25+.75*(.5+.5*Math.sin(phase*2));
+ ctx.globalAlpha=alpha;
+ if($('shadow').checked){ctx.shadowColor=colorAt(elapsed);ctx.shadowBlur=26}
+ if(effect==='rainbow'||effect==='pulse'){
+   const g=ctx.createLinearGradient(x,y-font/2,x+Math.max(tw,1),y+font/2);
+   if(effect==='rainbow'){g.addColorStop(0,'#ff3158');g.addColorStop(.18,'#ffb52e');g.addColorStop(.36,'#f7ff45');g.addColorStop(.54,'#35f58b');g.addColorStop(.72,'#28c9ff');g.addColorStop(.9,'#9b68ff');g.addColorStop(1,'#ff5cce')}
+   else {g.addColorStop(0,colorAt(elapsed));g.addColorStop(1,colorAt(elapsed+130))}
+   ctx.fillStyle=g;
+ }else ctx.fillStyle=$('textColor').value;
+ ctx.fillText(text,x,y);
+ ctx.restore();
+ // LEDドット風の暗い格子（文字そのものは消さない）
+ const d=Number($('dotSize').value), step=d*3.15;
+ ctx.save();ctx.fillStyle='rgba(0,0,0,.24)';
+ for(let yy=0;yy<H;yy+=step)for(let xx=0;xx<W;xx+=step){
+   ctx.beginPath();ctx.arc(xx+step/2,yy+step/2,Math.max(.5,d*.28),0,Math.PI*2);ctx.fill();
+ }
+ ctx.restore();
+ // subtle panel scanline
+ ctx.fillStyle='rgba(255,255,255,.025)';for(let yy=0;yy<H;yy+=5)ctx.fillRect(0,yy,W,1);
+ $('status').textContent=running?'● 再生中':'Ⅱ 停止中';
+}
+function tick(now){
+ if(!running)return;
+ const dt=Math.min((now-last)/1000,.05);last=now;elapsed+=dt*60;
+ const text=current();ctx.font=`${$('bold').checked?'800':'500'} ${Math.round(88*Number($('fontSize').value)/100)}px "Yu Gothic UI",Meiryo,sans-serif`;
+ const width=ctx.measureText(text).width;
+ x-=Number($('speed').value)*dt*9;
+ if(x+width<0){index=(index+1)%messages.length;x=canvas.width}
+ draw(dt);raf=requestAnimationFrame(tick);
+}
+function start(){if(running)return;running=true;last=performance.now();$('status').textContent='● 再生中';raf=requestAnimationFrame(tick)}
+function pause(){running=false;cancelAnimationFrame(raf);draw(0)}
+function add(){const v=$('messageInput').value.trim();if(!v)return;messages.push(v);renderList();if(messages.length===1){index=0;x=canvas.width-260}draw(0)}
+$('addBtn').onclick=add;
+$('replaceBtn').onclick=()=>{const v=$('messageInput').value.trim();if(!v)return;messages[index]=v;renderList();x=canvas.width-260;draw(0)};
+$('startBtn').onclick=start;$('pauseBtn').onclick=pause;
+$('resetBtn').onclick=()=>{index=0;x=canvas.width-260;draw(0)};
+$('clearBtn').onclick=()=>{pause();messages=[''];index=0;x=canvas.width-260;renderList();draw(0)};
+$('fullscreenBtn').onclick=async()=>{const el=$('.screen-wrap');try{if(!document.fullscreenElement)await el.requestFullscreen();else await document.exitFullscreen()}catch(e){alert('全画面表示を開始できませんでした。ブラウザの設定をご確認ください。')}};
+controls.forEach(id=>$(id).addEventListener('input',()=>{updateLabels();if(!running)draw(0);scheduleSave()}));
+$('messageInput').addEventListener('input',scheduleSave);
+const renderListWithoutSave=renderList;
+renderList=function(){renderListWithoutSave();scheduleSave()};
+restoreSettings();
+updateLabels();renderList();draw(0);
+window.addEventListener('pagehide',saveSettings);
+window.addEventListener('beforeunload',saveSettings);
+})();
+</script>
+</body></html>
